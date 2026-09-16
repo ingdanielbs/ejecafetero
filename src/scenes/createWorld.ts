@@ -62,11 +62,15 @@ export function createWorld(): World {
     setInteriorMode(inside: boolean) {
       interior = inside;
       museum.group.visible = inside;
-      // Atenuar sol al entrar (simula interior)
-      sun.intensity = inside ? 0.15 : 1.35;
-      hemi.intensity = inside ? 0.25 : 0.85;
+      // Ocultar cascarón exterior para evitar oclusión / oscuridad
+      outdoor.group.visible = !inside;
+      house.group.visible = !inside;
+      sky.visible = !inside;
+      sun.intensity = inside ? 0.05 : 1.35;
+      hemi.intensity = inside ? 0.45 : 0.85;
+      scene.background = new THREE.Color(inside ? 0x1e2a22 : palette.skyHorizon);
       scene.fog = inside
-        ? new THREE.FogExp2(0xd8cfc0, 0.035)
+        ? new THREE.Fog(0xcfc6b8, 8, 22)
         : new THREE.FogExp2(palette.fog, 0.012);
     },
     isInterior() {
