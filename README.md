@@ -77,7 +77,7 @@ WebXR exige un origen seguro: **HTTPS** o **localhost**.
 | Archivo | Escena | Notas |
 |---------|--------|-------|
 | `casa_tipica_eje_cafetero.glb` | Valle / casa | Reemplaza la casa procedural; trigger de puerta según bounds del mesh |
-| `palma_cera.glb` | Valle | Clones con escala 0.4–0.65 (~19–31 m) |
+| `palma_cera.glb` | Valle | Clones con escala Y ~0.5–0.7 y XZ más estrecho (~16–24 m de alto) |
 | `terreno_colina_modulo.glb` | Valle | Parches de colina sobre el suelo procedural |
 | `prop_saco_cafe.glb` | Museo | Pedestal **Café** |
 | `prop_taza_cafe.glb` | Museo | Junto al saco (escala ×4 para lectura de museo) |
