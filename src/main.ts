@@ -26,18 +26,22 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 250);
-const world = createWorld();
+
+ui.setLoading('Cargando modelos del Valle del Cócora…');
+const world = await createWorld((message) => ui.setLoading(message));
+ui.setLoading(null);
 camera.position.copy(world.spawn);
 
 function collidesWithHouse(x: number, z: number, forTeleport = false): boolean {
   if (world.isInterior()) return false;
   const hp = world.house.group.position;
-  const halfW = 5.1;
-  const halfD = 4.1;
+  const halfW = world.house.halfW;
+  const halfD = world.house.halfD;
   const insideFootprint = Math.abs(x - hp.x) < halfW && Math.abs(z - hp.z) < halfD;
   if (!insideFootprint) return false;
-  const doorZ = hp.z + 4;
-  if (z > doorZ - 0.5 && Math.abs(x - hp.x) < 1.0) return false;
+  // Hueco de puerta hacia +Z (fachada)
+  const doorZ = hp.z + halfD - 0.2;
+  if (z > doorZ - 0.8 && Math.abs(x - hp.x) < 1.1) return false;
   return forTeleport || true;
 }
 
@@ -63,7 +67,7 @@ const teleport = new TeleportControls({
   isValidTarget: (p) => {
     if (world.isInterior()) {
       const hp = world.house.group.position;
-      return Math.abs(p.x - hp.x) < 4.4 && Math.abs(p.z - hp.z) < 3.4;
+      return Math.abs(p.x - hp.x) < world.house.halfW - 0.6 && Math.abs(p.z - hp.z) < world.house.halfD - 0.6;
     }
     return !collidesWithHouse(p.x, p.z, true);
   },

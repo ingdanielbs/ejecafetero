@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createPBR, palette } from '../utils/materials';
-import { createPalmForest } from '../utils/palmTree';
+import { createPalmForestFromGltf } from '../utils/palmTree';
+import { loadModel, MODEL_URLS, prepareGltfMaterials, type LoadProgress } from '../utils/gltfAssets';
 
 export interface OutdoorSceneResult {
   group: THREE.Group;
@@ -8,11 +9,41 @@ export interface OutdoorSceneResult {
   houseApproach: THREE.Vector3;
 }
 
-export function createOutdoorScene(): OutdoorSceneResult {
+async function addTerrainModules(
+  parent: THREE.Object3D,
+  onProgress?: LoadProgress,
+): Promise<void> {
+  const template = await loadModel(MODEL_URLS.terreno, 'módulos de terreno', onProgress);
+  if (!template) return;
+
+  prepareGltfMaterials(template);
+  const placements: Array<{ x: number; z: number; y: number; rot: number; sx: number; sz: number }> = [
+    { x: -42, z: -18, y: -0.4, rot: 0.4, sx: 1.2, sz: 1.1 },
+    { x: 48, z: -35, y: -0.6, rot: 1.1, sx: 1.4, sz: 1.2 },
+    { x: -55, z: 28, y: -0.5, rot: 2.2, sx: 1.1, sz: 1.3 },
+    { x: 38, z: 40, y: -0.45, rot: -0.7, sx: 1.3, sz: 1.15 },
+    { x: 0, z: -62, y: -0.7, rot: 0.2, sx: 1.6, sz: 1.4 },
+  ];
+
+  const hills = new THREE.Group();
+  hills.name = 'TerrainModules';
+  for (const p of placements) {
+    const hill = template.clone(true);
+    hill.position.set(p.x, p.y, p.z);
+    hill.rotation.y = p.rot;
+    hill.scale.set(p.sx, 1, p.sz);
+    hills.add(hill);
+  }
+  parent.add(hills);
+}
+
+export async function createOutdoorScene(
+  onProgress?: LoadProgress,
+): Promise<OutdoorSceneResult> {
   const group = new THREE.Group();
   group.name = 'OutdoorScene';
 
-  // Terreno ondulado simple
+  // Terreno ondulado base
   const groundGeo = new THREE.PlaneGeometry(220, 220, 64, 64);
   const pos = groundGeo.attributes.position as THREE.BufferAttribute;
   for (let i = 0; i < pos.count; i++) {
@@ -22,7 +53,6 @@ export function createOutdoorScene(): OutdoorSceneResult {
       Math.sin(x * 0.04) * 1.8 +
       Math.cos(y * 0.035) * 2.2 +
       Math.sin((x + y) * 0.02) * 1.4;
-    // Valle central más bajo
     const dist = Math.hypot(x, y);
     const valley = THREE.MathUtils.smoothstep(12, 55, dist) * h;
     pos.setZ(i, valley);
@@ -36,7 +66,8 @@ export function createOutdoorScene(): OutdoorSceneResult {
   ground.receiveShadow = true;
   group.add(ground);
 
-  // Colinas lejanas (siluetas)
+  await addTerrainModules(group, onProgress);
+
   const hillMat = createPBR(palette.grassDark, { roughness: 1 });
   for (let i = 0; i < 8; i++) {
     const angle = (i / 8) * Math.PI * 2 + 0.2;
@@ -51,7 +82,6 @@ export function createOutdoorScene(): OutdoorSceneResult {
     group.add(hill);
   }
 
-  // Sendero hacia la casa (z negativo)
   const pathPoints: THREE.Vector3[] = [];
   for (let t = 0; t <= 1; t += 0.05) {
     const z = THREE.MathUtils.lerp(8, -28, t);
@@ -68,19 +98,18 @@ export function createOutdoorScene(): OutdoorSceneResult {
 
   const houseApproach = new THREE.Vector3(0, 0, -30);
 
-  createPalmForest(
+  await createPalmForestFromGltf(
     group,
-    48,
+    40,
     { minX: -70, maxX: 70, minZ: -70, maxZ: 70 },
     (x, z) => {
-      // Evitar sendero y patio de la casa
       if (Math.abs(x) < 5 && z < 12 && z > -40) return true;
-      if (Math.hypot(x - houseApproach.x, z - houseApproach.z) < 12) return true;
+      if (Math.hypot(x - houseApproach.x, z - houseApproach.z) < 14) return true;
       return false;
     },
+    onProgress,
   );
 
-  // Algunas rocas / hitos
   const rockMat = createPBR(0x6a6a62, { roughness: 0.95 });
   for (let i = 0; i < 10; i++) {
     const rock = new THREE.Mesh(
