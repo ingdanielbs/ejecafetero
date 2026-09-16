@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createPBR, palette } from './materials';
+import { loadModel, MODEL_URLS, prepareGltfMaterials, type LoadProgress } from './gltfAssets';
 
 const sharedTrunkMat = createPBR(palette.palmTrunk, { roughness: 0.92 });
 const sharedFrondMat = createPBR(palette.palmFrond, { roughness: 0.75 });
@@ -15,7 +16,7 @@ function getGeometries() {
 
 /**
  * Palma de cera estilizada (procedural).
- * Usamos meshes compartidos + clones ligeros; para bosques densos preferir InstancedMesh.
+ * Fallback si el GLB no carga.
  */
 export function createPalmTree(height = 18 + Math.random() * 10): THREE.Group {
   const group = new THREE.Group();
@@ -45,7 +46,7 @@ export function createPalmTree(height = 18 + Math.random() * 10): THREE.Group {
   return group;
 }
 
-/** Bosque de palmas con InstancedMesh (mejor para Quest). */
+/** Bosque de palmas procedural con InstancedMesh (fallback). */
 export function createPalmForest(
   parent: THREE.Object3D,
   count: number,
@@ -98,4 +99,46 @@ export function createPalmForest(
   trunkMesh.instanceMatrix.needsUpdate = true;
   frondMesh.instanceMatrix.needsUpdate = true;
   parent.add(trunkMesh, frondMesh);
+}
+
+/**
+ * Bosque con clones del GLB `palma_cera` (escala ~0.4–0.65 → 19–31 m de altura).
+ */
+export async function createPalmForestFromGltf(
+  parent: THREE.Object3D,
+  count: number,
+  area: { minX: number; maxX: number; minZ: number; maxZ: number },
+  avoid: (x: number, z: number) => boolean,
+  onProgress?: LoadProgress,
+): Promise<boolean> {
+  const template = await loadModel(MODEL_URLS.palma, 'palmas de cera', onProgress);
+  if (!template) {
+    createPalmForest(parent, count, area, avoid);
+    return false;
+  }
+
+  prepareGltfMaterials(template);
+  const forest = new THREE.Group();
+  forest.name = 'PalmForestGltf';
+
+  let placed = 0;
+  let attempts = 0;
+  while (placed < count && attempts < count * 24) {
+    attempts++;
+    const x = THREE.MathUtils.lerp(area.minX, area.maxX, Math.random());
+    const z = THREE.MathUtils.lerp(area.minZ, area.maxZ, Math.random());
+    if (avoid(x, z)) continue;
+
+    const palm = template.clone(true);
+    const scale = 0.4 + Math.random() * 0.25;
+    palm.position.set(x, 0, z);
+    palm.rotation.y = Math.random() * Math.PI * 2;
+    palm.scale.setScalar(scale);
+    palm.userData.isPalm = true;
+    forest.add(palm);
+    placed++;
+  }
+
+  parent.add(forest);
+  return true;
 }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createPBR, palette } from '../utils/materials';
+import { loadModel, MODEL_URLS, prepareGltfMaterials, type LoadProgress } from '../utils/gltfAssets';
 
 export interface HouseResult {
   group: THREE.Group;
@@ -8,13 +9,44 @@ export interface HouseResult {
   /** Punto justo dentro del umbral */
   doorInterior: THREE.Vector3;
   doorTrigger: THREE.Object3D;
+  /** Semianchos para colisión / teletransporte */
+  halfW: number;
+  halfD: number;
+}
+
+function attachDoorTrigger(
+  group: THREE.Group,
+  worldPosition: THREE.Vector3,
+  frontLocalZ: number,
+): Pick<HouseResult, 'doorExterior' | 'doorInterior' | 'doorTrigger'> {
+  const doorExterior = new THREE.Vector3(
+    worldPosition.x,
+    1.6,
+    worldPosition.z + frontLocalZ + 2.0,
+  );
+  const doorInterior = new THREE.Vector3(
+    worldPosition.x,
+    1.6,
+    worldPosition.z + frontLocalZ - 1.5,
+  );
+
+  const doorTrigger = new THREE.Mesh(
+    new THREE.BoxGeometry(2.4, 2.6, 1.8),
+    new THREE.MeshBasicMaterial({ visible: false }),
+  );
+  doorTrigger.name = 'DoorTriggerMesh';
+  doorTrigger.position.set(0, 1.3, frontLocalZ + 0.6);
+  doorTrigger.userData.isDoorTrigger = true;
+  group.add(doorTrigger);
+
+  return { doorExterior, doorInterior, doorTrigger };
 }
 
 /**
  * Casa típica del Eje Cafetero: muros claros, madera, techo de teja.
- * Geometría procedural lista para reemplazar por GLTF.
+ * Usada como fallback si el GLB no carga.
  */
-export function createHouse(position: THREE.Vector3): HouseResult {
+export function createProceduralHouse(position: THREE.Vector3): HouseResult {
   const group = new THREE.Group();
   group.name = 'CasaTipica';
   group.position.copy(position);
@@ -29,7 +61,6 @@ export function createHouse(position: THREE.Vector3): HouseResult {
   const d = 8;
   const h = 3.2;
 
-  // Plataforma / zócalo
   const plinth = new THREE.Mesh(
     new THREE.BoxGeometry(w + 0.6, 0.3, d + 1.2),
     woodDarkMat,
@@ -39,7 +70,6 @@ export function createHouse(position: THREE.Vector3): HouseResult {
   plinth.receiveShadow = true;
   group.add(plinth);
 
-  // Piso exterior del corredor
   const porch = new THREE.Mesh(
     new THREE.BoxGeometry(w + 0.2, 0.12, 1.6),
     woodMat,
@@ -48,7 +78,6 @@ export function createHouse(position: THREE.Vector3): HouseResult {
   porch.receiveShadow = true;
   group.add(porch);
 
-  // Muros (caja hueca simplificada: 4 paneles + techo)
   const wallThickness = 0.18;
   const walls: THREE.Mesh[] = [];
 
@@ -64,7 +93,6 @@ export function createHouse(position: THREE.Vector3): HouseResult {
   right.position.set(w / 2, floorY + h / 2, 0);
   walls.push(right);
 
-  // Frente con hueco de puerta: dos paneles laterales + dintel
   const doorWidth = 1.4;
   const doorHeight = 2.3;
   const sideW = (w - doorWidth) / 2;
@@ -95,7 +123,6 @@ export function createHouse(position: THREE.Vector3): HouseResult {
     group.add(wall);
   }
 
-  // Marco de puerta y hoja (portal)
   const frame = new THREE.Mesh(
     new THREE.BoxGeometry(doorWidth + 0.15, doorHeight + 0.1, 0.12),
     woodMat,
@@ -112,7 +139,6 @@ export function createHouse(position: THREE.Vector3): HouseResult {
   door.userData.isDoor = true;
   group.add(door);
 
-  // Columnas del corredor
   for (const sx of [-w / 2 + 0.5, w / 2 - 0.5]) {
     const col = new THREE.Mesh(
       new THREE.CylinderGeometry(0.12, 0.14, h * 0.95, 8),
@@ -123,7 +149,6 @@ export function createHouse(position: THREE.Vector3): HouseResult {
     group.add(col);
   }
 
-  // Techo a dos aguas
   const roofGroup = new THREE.Group();
   const roofLen = w + 1.2;
   const roofDepth = d + 2.2;
@@ -146,7 +171,6 @@ export function createHouse(position: THREE.Vector3): HouseResult {
   roofRight.castShadow = true;
   roofGroup.add(roofRight);
 
-  // Cumbrera
   const ridge = new THREE.Mesh(
     new THREE.BoxGeometry(roofLen + 0.1, 0.15, 0.2),
     woodDarkMat,
@@ -155,36 +179,58 @@ export function createHouse(position: THREE.Vector3): HouseResult {
   roofGroup.add(ridge);
   group.add(roofGroup);
 
-  // Ventanas laterales decorativas
-  const windowMat = createPBR(0x87a8b8, { roughness: 0.25, metalness: 0.2, emissive: 0x223344, emissiveIntensity: 0.15 });
+  const windowMat = createPBR(0x87a8b8, {
+    roughness: 0.25,
+    metalness: 0.2,
+    emissive: 0x223344,
+    emissiveIntensity: 0.15,
+  });
   for (const side of [-1, 1]) {
     const win = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.1, 1.4), windowMat);
     win.position.set(side * (w / 2 + 0.02), floorY + 1.7, -0.5);
     group.add(win);
   }
 
-  const doorExterior = new THREE.Vector3(
-    position.x,
-    1.6,
-    position.z + d / 2 + 2.2,
-  );
-  const doorInterior = new THREE.Vector3(position.x, 1.6, position.z + d / 2 - 1.2);
+  const doorBits = attachDoorTrigger(group, position, d / 2);
+  return {
+    group,
+    ...doorBits,
+    halfW: w / 2 + 0.1,
+    halfD: d / 2 + 0.1,
+  };
+}
 
-  const doorTrigger = new THREE.Object3D();
-  doorTrigger.name = 'DoorTrigger';
-  doorTrigger.position.set(0, 1.2, d / 2 + 0.8);
-  doorTrigger.userData.isDoorTrigger = true;
-  group.add(doorTrigger);
+/**
+ * Casa desde GLB Blender. Fachada original hacia −Z; rotamos π para mirar al sendero (+Z).
+ */
+export async function createHouse(
+  position: THREE.Vector3,
+  onProgress?: LoadProgress,
+): Promise<HouseResult> {
+  const model = await loadModel(MODEL_URLS.casa, 'casa típica', onProgress);
+  if (!model) {
+    return createProceduralHouse(position);
+  }
 
-  // Zona interactuable invisible
-  const triggerMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(2.2, 2.5, 1.5),
-    new THREE.MeshBasicMaterial({ visible: false }),
-  );
-  triggerMesh.position.copy(doorTrigger.position);
-  triggerMesh.userData.isDoorTrigger = true;
-  triggerMesh.name = 'DoorTriggerMesh';
-  group.add(triggerMesh);
+  prepareGltfMaterials(model);
 
-  return { group, doorExterior, doorInterior, doorTrigger: triggerMesh };
+  const group = new THREE.Group();
+  group.name = 'CasaTipica';
+  group.position.copy(position);
+  // Porche del asset mira −Z; el valle se aborda desde +Z.
+  model.rotation.y = Math.PI;
+  group.add(model);
+  group.updateMatrixWorld(true);
+
+  const box = new THREE.Box3().setFromObject(group);
+  const size = box.getSize(new THREE.Vector3());
+  const frontLocalZ = box.max.z - position.z;
+  const doorBits = attachDoorTrigger(group, position, frontLocalZ);
+
+  return {
+    group,
+    ...doorBits,
+    halfW: Math.max(size.x / 2, 5),
+    halfD: Math.max(size.z / 2, 4),
+  };
 }

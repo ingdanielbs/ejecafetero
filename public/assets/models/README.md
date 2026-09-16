@@ -39,7 +39,11 @@ Escala sugerida en Three.js: `model.scale.set(1, 1, 1)` (ya en metros). Ajusta s
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 const loader = new GLTFLoader();
+<<<<<<< HEAD
 loader.load('/assets/casa_tipica_eje_cafetero.glb', (gltf) => {
+=======
+loader.load('/assets/models/casa_tipica_eje_cafetero.glb', (gltf) => {
+>>>>>>> dcee0a713b95cba146c2227912d1805f256c45b0
   const casa = gltf.scene;
   casa.position.set(0, 0, -15); // metros
   scene.add(casa);

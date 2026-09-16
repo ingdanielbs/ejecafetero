@@ -5,6 +5,7 @@ export interface UIHandles {
   setZone: (name: string) => void;
   setPrompt: (text: string | null) => void;
   setCrosshairHot: (hot: boolean) => void;
+  setLoading: (text: string | null) => void;
   openHotspot: (id: HotspotId) => void;
   closeHotspot: () => void;
   isOverlayOpen: () => boolean;
@@ -14,6 +15,13 @@ export interface UIHandles {
 
 export function createUI(parent: HTMLElement): UIHandles {
   parent.innerHTML = `
+    <div class="loading-screen" id="loading-screen" role="status" aria-live="polite">
+      <div class="loading-card">
+        <p class="loading-brand">Valle del Cócora</p>
+        <p class="loading-title" id="loading-title">Cargando modelos del valle…</p>
+        <p class="loading-hint">Casa, palmas de cera y props del museo (GLB).</p>
+      </div>
+    </div>
     <div class="zone-badge" id="zone-badge">Valle del Cócora</div>
     <div class="crosshair" id="crosshair" aria-hidden="true"></div>
     <div class="prompt" id="interact-prompt" role="status"></div>
@@ -31,6 +39,8 @@ export function createUI(parent: HTMLElement): UIHandles {
     <div id="overlay-slot"></div>
   `;
 
+  const loadingScreen = parent.querySelector('#loading-screen') as HTMLElement;
+  const loadingTitle = parent.querySelector('#loading-title') as HTMLElement;
   const zoneBadge = parent.querySelector('#zone-badge') as HTMLElement;
   const crosshair = parent.querySelector('#crosshair') as HTMLElement;
   const prompt = parent.querySelector('#interact-prompt') as HTMLElement;
@@ -56,6 +66,15 @@ export function createUI(parent: HTMLElement): UIHandles {
     },
     setCrosshairHot(hot) {
       crosshair.classList.toggle('hot', hot);
+    },
+    setLoading(text) {
+      if (!text) {
+        loadingScreen.classList.add('hidden');
+        loadingTitle.textContent = '';
+        return;
+      }
+      loadingScreen.classList.remove('hidden');
+      loadingTitle.textContent = text;
     },
     openHotspot(id) {
       const content = HOTSPOTS[id];

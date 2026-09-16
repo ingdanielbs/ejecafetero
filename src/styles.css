@@ -242,6 +242,49 @@ body,
   opacity: 1;
 }
 
+.loading-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(61, 90, 58, 0.55), transparent 55%),
+    linear-gradient(165deg, #1a2e1f, #0f1a14 70%);
+  z-index: 30;
+  transition: opacity 0.35s ease, visibility 0.35s ease;
+}
+
+.loading-screen.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.loading-card {
+  text-align: center;
+  padding: 1.5rem 1.75rem;
+  max-width: 22rem;
+}
+
+.loading-brand {
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+  color: var(--accent-soft);
+  margin-bottom: 0.65rem;
+}
+
+.loading-title {
+  font-size: 1rem;
+  color: var(--text);
+  margin-bottom: 0.4rem;
+}
+
+.loading-hint {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
