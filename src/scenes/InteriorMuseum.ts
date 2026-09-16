@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createPBR, palette } from '../utils/materials';
 import type { HotspotId } from '../ui/hotspotContent';
+import { loadModel, MODEL_URLS, prepareGltfMaterials, type LoadProgress } from '../utils/gltfAssets';
 
 export interface MuseumResult {
   group: THREE.Group;
@@ -25,10 +26,23 @@ function makeLabelTexture(text: string): THREE.CanvasTexture {
   return tex;
 }
 
+function createFallbackProp(color: number): THREE.Mesh {
+  return new THREE.Mesh(
+    new THREE.IcosahedronGeometry(0.28, 1),
+    createPBR(color, {
+      roughness: 0.45,
+      metalness: 0.15,
+      emissive: color,
+      emissiveIntensity: 0.08,
+    }),
+  );
+}
+
 function createPedestal(
   title: string,
   hotspotId: HotspotId,
   exhibitColor: number,
+  propRoot: THREE.Object3D | null,
 ): THREE.Group {
   const g = new THREE.Group();
   g.name = `Hotspot_${hotspotId}`;
@@ -42,11 +56,8 @@ function createPedestal(
   base.receiveShadow = true;
   g.add(base);
 
-  const prop = new THREE.Mesh(
-    new THREE.IcosahedronGeometry(0.28, 1),
-    createPBR(exhibitColor, { roughness: 0.45, metalness: 0.15, emissive: exhibitColor, emissiveIntensity: 0.08 }),
-  );
-  prop.position.y = 1.15;
+  const prop = propRoot ?? createFallbackProp(exhibitColor);
+  prop.position.y = 0.9;
   prop.castShadow = true;
   g.add(prop);
 
@@ -57,20 +68,23 @@ function createPedestal(
   plate.position.set(0, 0.55, 0.56);
   g.add(plate);
 
-  // Volumen de interacción
   const hit = new THREE.Mesh(
-    new THREE.SphereGeometry(0.7, 12, 12),
+    new THREE.SphereGeometry(0.85, 12, 12),
     new THREE.MeshBasicMaterial({ visible: false }),
   );
-  hit.position.y = 1.0;
+  hit.position.y = 1.15;
   hit.userData.isHotspot = true;
   hit.userData.hotspotId = hotspotId as HotspotId;
   g.add(hit);
 
-  // Anillo indicador
   const ring = new THREE.Mesh(
     new THREE.TorusGeometry(0.55, 0.03, 8, 24),
-    createPBR(0xe8a06a, { roughness: 0.4, metalness: 0.3, emissive: 0xc45c26, emissiveIntensity: 0.35 }),
+    createPBR(0xe8a06a, {
+      roughness: 0.4,
+      metalness: 0.3,
+      emissive: 0xc45c26,
+      emissiveIntensity: 0.35,
+    }),
   );
   ring.rotation.x = Math.PI / 2;
   ring.position.y = 0.05;
@@ -120,11 +134,27 @@ function createWallPanel(hotspotId: HotspotId, title: string): THREE.Group {
   return g;
 }
 
+async function loadExhibitProp(
+  url: string,
+  label: string,
+  onProgress?: LoadProgress,
+  scale = 1,
+): Promise<THREE.Group | null> {
+  const model = await loadModel(url, label, onProgress);
+  if (!model) return null;
+  prepareGltfMaterials(model);
+  model.scale.setScalar(scale);
+  return model;
+}
+
 /**
  * Interior museo dentro de la casa (misma huella ~10×8).
- * Visible solo cuando el jugador está en modo interior.
+ * Props GLB sobre pedestales; overlays HTML de hotspot sin cambios.
  */
-export function createInteriorMuseum(housePosition: THREE.Vector3): MuseumResult {
+export async function createInteriorMuseum(
+  housePosition: THREE.Vector3,
+  onProgress?: LoadProgress,
+): Promise<MuseumResult> {
   const group = new THREE.Group();
   group.name = 'InteriorMuseum';
   group.position.copy(housePosition);
@@ -149,7 +179,6 @@ export function createInteriorMuseum(housePosition: THREE.Vector3): MuseumResult
   ceiling.position.y = 3.1;
   group.add(ceiling);
 
-  // Paredes interiores (más cortas que el exterior para no z-fight)
   const back = new THREE.Mesh(new THREE.BoxGeometry(w, 2.9, 0.12), wallMat);
   back.position.set(0, floorY + 1.45, -d / 2 + 0.1);
   group.add(back);
@@ -162,7 +191,6 @@ export function createInteriorMuseum(housePosition: THREE.Vector3): MuseumResult
   right.position.set(w / 2 - 0.1, floorY + 1.45, 0);
   group.add(right);
 
-  // Iluminación interior cálida (suficiente para Quest / tone mapping)
   const ambient = new THREE.AmbientLight(0xfff2e0, 0.7);
   group.add(ambient);
 
@@ -180,19 +208,41 @@ export function createInteriorMuseum(housePosition: THREE.Vector3): MuseumResult
   fillB.position.set(2.5, 2.0, -1.5);
   group.add(fillB);
 
+  onProgress?.('Cargando props del museo…');
+  const [saco, taza, guaduaProp, artesaniaProp] = await Promise.all([
+    loadExhibitProp(MODEL_URLS.sacoCafe, 'saco de café', onProgress),
+    loadExhibitProp(MODEL_URLS.tazaCafe, 'taza de café', onProgress, 4),
+    loadExhibitProp(MODEL_URLS.guadua, 'guadua', onProgress),
+    loadExhibitProp(MODEL_URLS.artesania, 'artesanía', onProgress),
+  ]);
+
+  const cafeProp = new THREE.Group();
+  cafeProp.name = 'CafeExhibit';
+  if (saco) {
+    saco.position.set(-0.12, 0, 0);
+    cafeProp.add(saco);
+  }
+  if (taza) {
+    taza.position.set(0.28, 0.02, 0.12);
+    cafeProp.add(taza);
+  }
+  if (cafeProp.children.length === 0) {
+    cafeProp.add(createFallbackProp(0x6b4423));
+  }
+
   const hotspots: THREE.Object3D[] = [];
 
-  const cafe = createPedestal('Café', 'cafe', 0x6b4423);
+  const cafe = createPedestal('Café', 'cafe', 0x6b4423, cafeProp);
   cafe.position.set(-2.8, floorY, -1.5);
   group.add(cafe);
   hotspots.push(...cafe.children.filter((c) => c.userData.isHotspot));
 
-  const guadua = createPedestal('Guadua', 'guadua', 0x2f6b35);
+  const guadua = createPedestal('Guadua', 'guadua', 0x2f6b35, guaduaProp);
   guadua.position.set(2.8, floorY, -1.5);
   group.add(guadua);
   hotspots.push(...guadua.children.filter((c) => c.userData.isHotspot));
 
-  const artesania = createPedestal('Artesanía', 'artesania', 0xb87333);
+  const artesania = createPedestal('Artesanía', 'artesania', 0xb87333, artesaniaProp);
   artesania.position.set(0, floorY, -2.6);
   group.add(artesania);
   hotspots.push(...artesania.children.filter((c) => c.userData.isHotspot));
@@ -203,7 +253,6 @@ export function createInteriorMuseum(housePosition: THREE.Vector3): MuseumResult
   group.add(videoPanel);
   hotspots.push(...videoPanel.children.filter((c) => c.userData.isHotspot));
 
-  // Banco central
   const bench = new THREE.Mesh(
     new THREE.BoxGeometry(2.2, 0.45, 0.55),
     createPBR(palette.wood, { roughness: 0.85 }),
@@ -212,7 +261,6 @@ export function createInteriorMuseum(housePosition: THREE.Vector3): MuseumResult
   bench.castShadow = true;
   group.add(bench);
 
-  // Salida (misma puerta)
   const exitTrigger = new THREE.Mesh(
     new THREE.BoxGeometry(2.2, 2.5, 1.2),
     new THREE.MeshBasicMaterial({ visible: false }),
@@ -222,7 +270,6 @@ export function createInteriorMuseum(housePosition: THREE.Vector3): MuseumResult
   exitTrigger.name = 'ExitTrigger';
   group.add(exitTrigger);
 
-  // Indicador de salida
   const exitSign = new THREE.Mesh(
     new THREE.PlaneGeometry(0.9, 0.28),
     new THREE.MeshBasicMaterial({ map: makeLabelTexture('Salida'), side: THREE.DoubleSide }),
