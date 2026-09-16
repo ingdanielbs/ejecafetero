@@ -130,10 +130,12 @@ export async function createPalmForestFromGltf(
     if (avoid(x, z)) continue;
 
     const palm = template.clone(true);
-    const scale = 0.4 + Math.random() * 0.25;
+    // Altura ~16–24 m; XZ reducido porque el GLB trae corona ~60 m de diámetro.
+    const hScale = 0.52 + Math.random() * 0.18;
+    const xzScale = hScale * 0.48;
     palm.position.set(x, 0, z);
     palm.rotation.y = Math.random() * Math.PI * 2;
-    palm.scale.setScalar(scale);
+    palm.scale.set(xzScale, hScale, xzScale);
     palm.userData.isPalm = true;
     forest.add(palm);
     placed++;

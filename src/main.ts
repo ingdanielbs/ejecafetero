@@ -273,10 +273,12 @@ await setupXR(renderer, ui);
   getZone: () => world.getZone(getPlayerPosition()),
   isInterior: () => world.isInterior(),
   setPosition: (x: number, y: number, z: number) => desktop.setPosition(x, y, z),
+  lookAt: (x: number, y: number, z: number) => desktop.lookAt(new THREE.Vector3(x, y, z)),
   getPosition: () => {
     const p = getPlayerPosition();
     return { x: p.x, y: p.y, z: p.z };
   },
+  houseHalfExtents: () => ({ halfW: world.house.halfW, halfD: world.house.halfD }),
 };
 
 renderer.setAnimationLoop(() => {
