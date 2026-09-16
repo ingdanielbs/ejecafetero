@@ -162,16 +162,23 @@ export function createInteriorMuseum(housePosition: THREE.Vector3): MuseumResult
   right.position.set(w / 2 - 0.1, floorY + 1.45, 0);
   group.add(right);
 
-  // Luz cálida interior
-  const lamp = new THREE.PointLight(0xffe0b8, 2.2, 14, 1.5);
-  lamp.position.set(0, 2.6, 0);
+  // Iluminación interior cálida (suficiente para Quest / tone mapping)
+  const ambient = new THREE.AmbientLight(0xfff2e0, 0.7);
+  group.add(ambient);
+
+  const lamp = new THREE.PointLight(0xffe0b8, 6.5, 18, 1.2);
+  lamp.position.set(0, 2.55, 0);
   lamp.castShadow = true;
   lamp.shadow.mapSize.set(512, 512);
   group.add(lamp);
 
-  const ambientFill = new THREE.PointLight(0xa8c4b0, 0.55, 16);
-  ambientFill.position.set(2, 2.2, 2);
-  group.add(ambientFill);
+  const fillA = new THREE.PointLight(0xd4e8c8, 2.2, 12);
+  fillA.position.set(-2.5, 2.0, 1.5);
+  group.add(fillA);
+
+  const fillB = new THREE.PointLight(0xffd7a8, 2.2, 12);
+  fillB.position.set(2.5, 2.0, -1.5);
+  group.add(fillB);
 
   const hotspots: THREE.Object3D[] = [];
 

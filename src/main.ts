@@ -73,6 +73,7 @@ teleport.connect();
 const audio = new AmbientAudioStub();
 const clock = new THREE.Clock();
 const raycaster = new THREE.Raycaster();
+raycaster.far = 4.5;
 const pointer = new THREE.Vector2(0, 0);
 const rotMatrix = new THREE.Matrix4();
 
@@ -85,10 +86,12 @@ const zoneLabels: Record<string, string> = {
 function enterMuseum(): void {
   world.setInteriorMode(true);
   const target = world.house.doorInterior;
+  const lookTarget = world.house.group.position.clone().add(new THREE.Vector3(0, 1.5, -2));
   if (renderer.xr.isPresenting) {
     teleport.teleportTo(new THREE.Vector3(target.x, 0, target.z));
   } else {
     desktop.setPosition(target.x, 1.6, target.z);
+    desktop.lookAt(lookTarget);
   }
   ui.setZone(zoneLabels.museum);
   ui.setPrompt(null);
@@ -97,10 +100,12 @@ function enterMuseum(): void {
 function exitMuseum(): void {
   world.setInteriorMode(false);
   const target = world.house.doorExterior;
+  const lookTarget = target.clone().add(new THREE.Vector3(0, 0, 8));
   if (renderer.xr.isPresenting) {
     teleport.teleportTo(new THREE.Vector3(target.x, 0, target.z));
   } else {
     desktop.setPosition(target.x, 1.6, target.z);
+    desktop.lookAt(lookTarget);
   }
   ui.setZone(zoneLabels.house);
   ui.setPrompt(null);
@@ -255,6 +260,20 @@ interactController.addEventListener('selectstart', () => {
 });
 
 await setupXR(renderer, ui);
+
+/** API mínima para pruebas automatizadas (no afecta la UX). */
+(window as unknown as { __tourDebug: Record<string, unknown> }).__tourDebug = {
+  enterMuseum,
+  exitMuseum,
+  openHotspot: (id: HotspotId) => ui.openHotspot(id),
+  getZone: () => world.getZone(getPlayerPosition()),
+  isInterior: () => world.isInterior(),
+  setPosition: (x: number, y: number, z: number) => desktop.setPosition(x, y, z),
+  getPosition: () => {
+    const p = getPlayerPosition();
+    return { x: p.x, y: p.y, z: p.z };
+  },
+};
 
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
